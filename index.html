@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prode Telegram Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        :root {
+            --tg-theme-bg-color: #18222d;
+            --tg-theme-text-color: #f5f5f5;
+            --tg-theme-hint-color: #b1c3d4;
+            --tg-theme-button-color: #2481cc;
+            --tg-theme-button-text-color: #ffffff;
+            --card-bg: #212d3b;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--tg-theme-bg-color);
+            color: var(--tg-theme-text-color);
+            margin: 0;
+            padding: 15px;
+            padding-bottom: 80px; /* Espacio para el botón flotante */
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 22px;
+            margin: 0 0 5px 0;
+        }
+
+        .user-info {
+            color: var(--tg-theme-hint-color);
+            font-size: 14px;
+        }
+
+        .partido-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .ronda-tag {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--tg-theme-hint-color);
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .marcador-contenedor {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .equipo {
+            flex: 1;
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .equipo.local { text-align: right; padding-right: 10px; }
+        .equipo.visitante { text-align: left; padding-left: 10px; }
+
+        .inputs-goles {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        input[type="number"] {
+            width: 45px;
+            height: 40px;
+            border-radius: 8px;
+            border: 1px solid #313e4f;
+            background-color: #18222d;
+            color: #fff;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        /* Quitar flechas del input number */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .guion {
+            color: var(--tg-theme-hint-color);
+            font-weight: bold;
+        }
+
+        #contenedor-partidos {
+            margin-top: 15px;
+        }
+
+        /* Botón de guardar de Telegram en la parte inferior */
+        .btn-guardar {
+            position: fixed;
+            bottom: 15px;
+            left: 15px;
+            right: 15px;
+            background-color: var(--tg-theme-button-color);
+            color: var(--tg-theme-button-text-color);
+            border: none;
+            border-radius: 10px;
+            padding: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🏆 PRODE MINI APP</h1>
+        <div class="user-info" id="user-display">Cargando usuario...</div>
+    </header>
+
+    <div id="contenedor-partidos">
+        <p style="text-align: center; color: var(--tg-theme-hint-color);">Cargando partidos desde la nube...</p>
+    </div>
+
+    <button class="btn-guardar" id="btn-enviar" onclick="guardarPronosticos()">Enviando Pronósticos ⚽</button>
+
+    <script>
+        // CONFIGURACIÓN DE SUPABASE
+        const SUPABASE_URL = "https://fnyueiajcgdwvlplrzoo.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZueXVlaWFqY2dkd3ZscGxyem9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1OTA0NTQsImV4cCI6MjA5ODE2NjQ1NH0.fwljpJ79Gt-RO-zdEr5oDcn5BefOAOs2z4IPwaT_wsY";
+        
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // Inicializar Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.expand(); 
+
+        // Obtener datos del usuario
+        const usuario = tg.initDataUnsafe?.user || { id: 12345, first_name: "Usuario", username: "Invitado" };
+        document.getElementById('user-display').innerText = `Jugador: ${usuario.first_name} (@${usuario.username || 'sin_user'})`;
+
+        // Función para cargar partidos
+        async function cargarPartidos() {
+            const { data: partidos, error } = await _supabase
+                .from('partidos')
+                .select('*')
+                .order('fecha', { ascending: true });
+
+            if (error) {
+                console.error("Error cargando partidos:", error);
+                return;
+            }
+
+            const contenedor = document.getElementById('contenedor-partidos');
+            contenedor.innerHTML = ''; 
+
+            partidos.forEach(partido => {
+                const card = document.createElement('div');
+                card.className = 'partido-card';
+                card.innerHTML = `
+                    <span class="ronda-tag">${partido.ronda} - ${partido.fecha}</span>
+                    <div class="marcador-contenedor">
+                        <div class="equipo local">${partido.local}</div>
+                        <div class="inputs-goles">
+                            <input type="number" min="0" id="local_${partido.id}" placeholder="-">
+                            <span class="guion">-</span>
+                            <input type="number" min="0" id="visitante_${partido.id}" placeholder="-">
+                        </div>
+                        <div class="equipo visitante">${partido.visitante}</div>
+                    </div>
+                `;
+                contenedor.appendChild(card);
+            });
+        }
+
+        // Función para enviar los votos a Supabase
+        async function guardarPronosticos() {
+            try {
+                // Primero aseguramos que el usuario exista en la tabla 'usuarios'
+                await _supabase.from('usuarios').upsert({
+                    id: usuario.id,
+                    username: usuario.username,
+                    nombre: usuario.first_name
+                });
+
+                // Buscamos todos los inputs para armar la lista de predicciones (CORREGIDO: Ya no está duplicado)
+                const inputs = document.querySelectorAll('input[id^="local_"]');
+                const predicciones = [];
+
+                inputs.forEach(inputLocal => {
+                    const partidoId = inputLocal.id.replace('local_', '');
+                    const inputVisitante = document.getElementById(`visitante_${partidoId}`);
+
+                    // Solo guardamos si el usuario llenó ambos campos
+                    if (inputLocal.value !== "" && inputVisitante.value !== "") {
+                        predicciones.push({
+                            usuario_id: usuario.id,
+                            partido_id: partidoId,
+                            pred_local: parseInt(inputLocal.value),
+                            pred_visitante: parseInt(inputVisitante.value)
+                        });
+                    }
+                });
+
+                if (predicciones.length === 0) {
+                    if (window.Telegram?.WebApp?.initData) {
+                        tg.showAlert("Por favor, introduce al menos un marcador.");
+                    } else {
+                        alert("Por favor, introduce al menos un marcador.");
+                    }
+                    return;
+                }
+
+                // Subimos las predicciones usando upsert
+                // Subimos las predicciones especificando qué llave única debe sobreescribir si se repite
+                const { error } = await _supabase
+                  .from('predicciones')
+                  .upsert(predicciones, { onConflict: 'usuario_id,partido_id' });
+
+
+                if (error) {
+                    if (window.Telegram?.WebApp?.initData) {
+                        tg.showAlert(`Error al guardar: ${error.message}`);
+                    } else {
+                        alert(`Error al guardar: ${error.message}`);
+                    }
+                } else {
+                    if (window.Telegram?.WebApp?.initData) {
+                        tg.showAlert("¡Tus pronósticos se han guardado con éxito! 🚀");
+                        tg.close();
+                    } else {
+                        alert("¡Tus pronósticos se han guardado con éxito en Supabase! 🚀 (Probando desde PC)");
+                    }
+                }
+            } catch (err) {
+                console.error("Error en el proceso:", err);
+                alert("Ocurrió un error inesperado. Revisa la consola (F12).");
+            }
+        }
+
+        // Arrancar la carga al abrir la página
+        cargarPartidos();
+    </script>
+</body>
+</html>

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prode Premium Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        :root {
+            --tg-theme-bg-color: #0b1a13; /* Verde ultra oscuro metálico */
+            --tg-theme-text-color: #e2e8f0;
+            --tg-theme-hint-color: #7da08e; /* Verde grisáceo */
+            --tg-theme-button-color: #1b4d3e; /* Botón verde cromo */
+            --tg-theme-button-text-color: #ffffff;
+            --card-bg: #132a20; /* Tarjeta verde bosque oscuro */
+            --card-border: #1f3f31;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: var(--tg-theme-bg-color);
+            color: var(--tg-theme-text-color);
+            margin: 0;
+            padding: 15px;
+            padding-bottom: 90px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 22px;
+            margin: 0 0 5px 0;
+            letter-spacing: 1px;
+            color: #4ade80; /* Destaque verde brillante */
+        }
+
+        .user-info {
+            color: var(--tg-theme-hint-color);
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .partido-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 15px;
+            margin-bottom: 14px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            position: relative;
+        }
+
+        .header-partido {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .ronda-tag {
+            color: var(--tg-theme-hint-color);
+            font-weight: bold;
+        }
+
+        .hora-tag {
+            color: #4ade80;
+            font-weight: bold;
+            background: rgba(74, 222, 128, 0.1);
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        .finalizado-tag {
+            color: #ef4444;
+            font-weight: bold;
+            background: rgba(239, 68, 68, 0.1);
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        .marcador-contenedor {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .equipo {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .equipo.local { justify-content: flex-end; text-align: right; }
+        .equipo.visitante { justify-content: flex-start; text-align: left; }
+
+        .bandera {
+            font-size: 20px;
+        }
+
+        .inputs-goles {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        input[type="number"] {
+            width: 42px;
+            height: 38px;
+            border-radius: 8px;
+            border: 1px solid #2c4e3f;
+            background-color: #0b1a13;
+            color: #fff;
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        input:disabled {
+            background-color: #1a2420;
+            color: #a7f3d0;
+            border-color: #1f3f31;
+        }
+
+        .guion {
+            color: var(--tg-theme-hint-color);
+            font-weight: bold;
+        }
+
+        .tu-resultado {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 12px;
+            color: #a7f3d0;
+            background: rgba(167, 243, 208, 0.05);
+            padding: 5px;
+            border-radius: 6px;
+            border: 1px dashed rgba(167, 243, 208, 0.2);
+        }
+
+        .btn-guardar {
+            position: fixed;
+            bottom: 15px;
+            left: 15px;
+            right: 15px;
+            background-color: var(--tg-theme-button-color);
+            color: var(--tg-theme-button-text-color);
+            border: 1px solid #2d6a54;
+            border-radius: 12px;
+            padding: 15px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🏆 PRODE MINI APP</h1>
+        <div class="user-info" id="user-display">Cargando jugador...</div>
+    </header>
+
+    <div id="contenedor-partidos">
+        <p style="text-align: center; color: var(--tg-theme-hint-color);">Cargando partidos desde la nube...</p>
+    </div>
+
+    <button class="btn-guardar" id="btn-enviar" onclick="guardarPronosticos()">Guardar Pronósticos ⚽</button>
+
+    <script>
+        const SUPABASE_URL = "https://fnyueiajcgdwvlplrzoo.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZueXVlaWFqY2dkd3ZscGxyem9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1OTA0NTQsImV4cCI6MjA5ODE2NjQ1NH0.fwljpJ79Gt-RO-zdEr5oDcn5BefOAOs2z4IPwaT_wsY";
+        
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const tg = window.Telegram.WebApp;
+        tg.expand(); 
+
+        // Leer datos de Telegram o usar Mock para PC
+        const usuario = tg.initDataUnsafe?.user || { id: 12345, first_name: "Usuario", username: "Invitado" };
+        
+        // CAPTURA DE GRUPO CORREGIDA: Leemos de forma segura el parámetro de la URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const grupoId = urlParams.get('tgWebAppStartParam') || urlParams.get('grupo') || null;
+
+        document.getElementById('user-display').innerText = `Jugador: ${usuario.first_name} ${grupoId ? `(Grupo: ${grupoId})` : ''}`;
+
+        async function cargarPartidos() {
+            const { data: partidos, error: errorPartidos } = await _supabase
+                .from('partidos')
+                .select('*')
+                .order('fecha', { ascending: true });
+
+            const { data: predicciones, error: errorPred } = await _supabase
+                .from('predicciones')
+                .select('*')
+                .eq('usuario_id', usuario.id);
+
+            if (errorPartidos) { console.error(errorPartidos); return; }
+
+            const miVoto = {};
+            if (predicciones) {
+                predicciones.forEach(p => { miVoto[p.partido_id] = p; });
+            }
+
+            const contenedor = document.getElementById('contenedor-partidos');
+            contenedor.innerHTML = ''; 
+
+            partidos.forEach(partido => {
+                const card = document.createElement('div');
+                card.className = 'partido-card';
+                
+                const esFinalizado = partido.estado === 'FINALIZADO';
+                const votoExistente = miVoto[partido.id];
+                
+                let infoTiempo = `<span class="hora-tag">⏱️ ${partido.fecha || '00:00'}</span>`;
+                if (esFinalizado) {
+                    infoTiempo = `<span class="finalizado-tag">🛑 FINALIZADO</span>`;
+                }
+
+                let valorLocal = votoExistente ? votoExistente.pred_local : '';
+                let valorVisitante = votoExistente ? votoExistente.pred_visitante : '';
+                let deshabilitado = esFinalizado ? 'disabled' : '';
+
+                if (esFinalizado) {
+                    valorLocal = partido.goles_real_local ?? 0;
+                    valorVisitante = partido.goles_real_visitante ?? 0;
+                }
+
+                const bLocal = partido.emoji_local || '🏴';
+                const bVisitante = partido.emoji_visitante || '🏴';
+
+                let htmlCard = `
+                    <div class="header-partido">
+                        <span class="ronda-tag">${partido.ronda}</span>
+                        ${infoTiempo}
+                    </div>
+                    <div class="marcador-contenedor">
+                        <div class="equipo local">
+                            <span>${partido.local}</span>
+                            <span class="bandera">${bLocal}</span>
+                        </div>
+                        <div class="inputs-goles">
+                            <input type="number" min="0" id="local_${partido.id}" value="${valorLocal}" ${deshabilitado} placeholder="-">
+                            <span class="guion">-</span>
+                            <input type="number" min="0" id="visitante_${partido.id}" value="${valorVisitante}" ${deshabilitado} placeholder="-">
+                        </div>
+                        <div class="equipo visitante">
+                            <span class="bandera">${bVisitante}</span>
+                            <span>${partido.visitante}</span>
+                        </div>
+                    </div>
+                `;
+
+                if (esFinalizado && votoExistente) {
+                    htmlCard += `
+                        <div class="tu-resultado">
+                            ✨ Tu resultado guardado: <b>${votoExistente.pred_local} - ${votoExistente.pred_visitante}</b>
+                        </div>
+                    `;
+                }
+
+                card.innerHTML = htmlCard;
+                contenedor.appendChild(card);
+            });
+        }
+
+        async function guardarPronosticos() {
+            try {
+                await _supabase.from('usuarios').upsert({
+                    id: usuario.id,
+                    username: usuario.username,
+                    nombre: usuario.first_name
+                });
+
+                const inputs = document.querySelectorAll('input[id^="local_"]:not(:disabled)');
+                const predicciones = [];
+
+                inputs.forEach(inputLocal => {
+                    const partidoId = inputLocal.id.replace('local_', '');
+                    // CORREGIDO: Usando partidoId correctamente con la "o"
+                    const inputVisitante = document.getElementById(`visitante_${partidoId}`);
+
+                    if (inputLocal.value !== "" && inputVisitante.value !== "") {
+                        predicciones.push({
+                            usuario_id: usuario.id,
+                            partido_id: partidoId,
+                            pred_local: parseInt(inputLocal.value),
+                            pred_visitante: parseInt(inputVisitante.value),
+                            grupo_id: grupoId ? parseInt(grupoId) : null
+                        });
+                    }
+                });
+
+                if (predicciones.length === 0) {
+                    alert("Por favor, introduce al menos un marcador nuevo.");
+                    return;
+                }
+
+                const { error } = await _supabase
+                    .from('predicciones')
+                    .upsert(predicciones, { onConflict: 'usuario_id,partido_id' });
+
+                if (error) {
+                    alert(`Error al guardar: ${error.message}`);
+                } else {
+                    if (window.Telegram?.WebApp?.initData) {
+                        tg.showAlert("¡Tus pronósticos se han guardado con éxito! 🚀");
+                        tg.close();
+                    } else {
+                        alert("¡Tus pronósticos se han guardado con éxito! 🚀");
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        cargarPartidos();
+    </script>
+</body>
+</html>
